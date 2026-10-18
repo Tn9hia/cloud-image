@@ -1,0 +1,56 @@
+#cloud-config
+# Ubuntu autoinstall cho Packer build (KVM - OpenStack + CloudStack).
+# File này được Packer render bằng templatefile() và phục vụ qua HTTP.
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  timezone: ${timezone}
+  refresh-installer:
+    update: false
+
+  # Tắt sshd của môi trường installer, nếu không Packer sẽ cố SSH vào installer
+  # và hết handshake attempts trước khi OS thật boot lên.
+  early-commands:
+    - systemctl stop ssh.socket ssh.service || true
+
+  apt:
+    geoip: false
+    primary:
+      - arches: [amd64, i386]
+        uri: ${ubuntu_mirror}
+      - arches: [default]
+        uri: http://ports.ubuntu.com/ubuntu-ports
+
+  # GPT: [1] bios_grub 1M | [2] / ext4 phần còn lại.
+  # Root là partition cuối, không LVM, không swap => cloud-init growpart nới được trực tiếp.
+  storage:
+    swap:
+      size: 0
+    config:
+      - {type: disk, id: disk0, match: {size: largest}, ptable: gpt, wipe: superblock-recursive, preserve: false, grub_device: true}
+      - {type: partition, id: part-bios, device: disk0, number: 1, size: 1M, flag: bios_grub, preserve: false}
+      - {type: partition, id: part-root, device: disk0, number: 2, size: -1, preserve: false}
+      - {type: format, id: fs-root, volume: part-root, fstype: ext4, label: cloudimg-rootfs, preserve: false}
+      - {type: mount, id: mount-root, device: fs-root, path: /}
+
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  packages:
+    - cloud-init
+    - cloud-guest-utils
+    - qemu-guest-agent
+
+  # Không khai báo identity: chỉ dùng root (password tạm) để Packer SSH,
+  # cleanup sẽ khoá lại. User thật do cloud-init tạo khi deploy VM.
+  user-data:
+    disable_root: false
+
+  late-commands:
+    - echo "root:${build_password}" | chroot /target chpasswd
+    - printf 'PermitRootLogin yes\nPasswordAuthentication yes\n' > /target/etc/ssh/sshd_config.d/01-packer-build.conf
+
+  shutdown: reboot

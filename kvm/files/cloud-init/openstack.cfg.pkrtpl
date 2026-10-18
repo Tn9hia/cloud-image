@@ -1,0 +1,29 @@
+# Managed by Packer (cloud-image/kvm) - platform: OpenStack (KVM).
+# Không sửa tay trên template; sửa trong repo rồi build lại.
+
+# ds-identify chỉ parse được dạng flow list trên MỘT dòng.
+# ConfigDrive (label config-2) ưu tiên trước, không có thì dùng metadata service 169.254.169.254.
+datasource_list: [ ConfigDrive, OpenStack, None ]
+datasource:
+  OpenStack:
+    max_wait: 120
+    timeout: 10
+    retries: 5
+
+system_info:
+  default_user:
+    name: ${default_user}
+
+disable_root: ${disable_root}
+ssh_pwauth: ${ssh_pwauth}
+
+# Module set_passwords / ssh giữ frequency mặc định (once-per-instance):
+# host key sinh lại khi tạo VM mới, password trong user-data chỉ áp ở lần boot đầu.
+
+# Thêm/cập nhật dòng "127.0.1.1 <hostname>" nhưng không ghi đè phần khách hàng tự sửa trong /etc/hosts.
+manage_etc_hosts: localhost
+
+growpart:
+  mode: auto
+  devices: [ "/" ]
+resize_rootfs: true

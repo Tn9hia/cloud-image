@@ -1,0 +1,42 @@
+# Kickstart Rocky Linux 9 cho Packer build (KVM - OpenStack + CloudStack).
+# File này được Packer render bằng templatefile() và phục vụ qua HTTP.
+text
+cdrom
+lang en_US.UTF-8
+keyboard us
+timezone ${timezone} --utc
+network --bootproto=dhcp --device=link --activate --onboot=yes
+rootpw --plaintext ${build_password}
+selinux --enforcing
+firewall --disabled
+services --enabled=sshd
+skipx
+firstboot --disabled
+
+# GPT: [1] biosboot 1M | [2] / xfs phần còn lại.
+# Root là partition cuối, không LVM, không swap => cloud-init growpart nới được trực tiếp.
+zerombr
+clearpart --all --initlabel --disklabel=gpt
+bootloader --location=mbr --timeout=1 --append="console=tty0 console=ttyS0,115200n8 no_timer_check"
+part biosboot --fstype=biosboot --size=1
+part / --fstype=xfs --size=2048 --grow
+
+reboot
+
+%packages --excludedocs
+@core
+openssh-server
+-firewalld
+-plymouth
+-kexec-tools
+-iwl*-firmware
+%end
+
+%post --erroronfail
+# Cho phép Packer SSH root bằng password trong lúc build, cleanup sẽ xoá file này.
+cat > /etc/ssh/sshd_config.d/01-packer-build.conf <<'EOF'
+PermitRootLogin yes
+PasswordAuthentication yes
+EOF
+chmod 0600 /etc/ssh/sshd_config.d/01-packer-build.conf
+%end

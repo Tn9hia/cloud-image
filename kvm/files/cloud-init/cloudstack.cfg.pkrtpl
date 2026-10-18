@@ -1,0 +1,40 @@
+# Managed by Packer (cloud-image/kvm) - platform: CloudStack (KVM).
+# Không sửa tay trên template; sửa trong repo rồi build lại.
+
+# ds-identify chỉ parse được dạng flow list trên MỘT dòng.
+# ConfigDrive: network dùng ConfigDrive provider (vd L2). CloudStack: metadata + password server trên Virtual Router.
+datasource_list: [ ConfigDrive, CloudStack, None ]
+datasource:
+  CloudStack:
+    max_wait: 120
+    timeout: 50
+
+system_info:
+  default_user:
+    name: ${default_user}
+
+disable_root: ${disable_root}
+ssh_pwauth: ${ssh_pwauth}
+
+# Password do password server của VR cấp không bắt đổi ở lần login đầu.
+chpasswd:
+  expire: false
+
+# Module set_passwords + ssh chạy mỗi lần boot (file 98_module_frequency.cfg sinh lúc build)
+# để Reset Password / Reset SSH Key trên CloudStack có tác dụng.
+# Vì ssh chạy mỗi boot nên phải tắt xoá host key, nếu không fingerprint đổi sau mỗi lần reboot.
+ssh_deletekeys: false
+
+# Bù lại: khi instance-id đổi (VM mới tạo từ snapshot/template) thì xoá host key cũ
+# để module ssh sinh bộ mới. bootcmd chạy trước module ssh trong stage init.
+# Lưu ý: nếu user-data khai báo bootcmd riêng thì list này bị thay thế.
+bootcmd:
+  - [ cloud-init-per, instance, regen-ssh-hostkeys, sh, -c, "rm -f /etc/ssh/ssh_host_*key*" ]
+
+# Thêm/cập nhật dòng "127.0.1.1 <hostname>" nhưng không ghi đè phần khách hàng tự sửa trong /etc/hosts.
+manage_etc_hosts: localhost
+
+growpart:
+  mode: auto
+  devices: [ "/" ]
+resize_rootfs: true
